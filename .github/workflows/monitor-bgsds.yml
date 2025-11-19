@@ -1,0 +1,50 @@
+name: Monitorar Boletim Geral SDS-PE
+
+on:
+  schedule:
+    # roda a cada 10 minutos
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write  # necessário pra poder dar git push
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true  # garante que o GITHUB_TOKEN será usado no push
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
+
+      - name: Rodar monitor do BGSDS
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python monitor_bgsds.py
+
+      - name: Commit do último ID se alterado
+        run: |
+          if git status --porcelain | grep "last_bgsds_id.txt"; then
+            echo "Alteração detectada em last_bgsds_id.txt, realizando commit..."
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add last_bgsds_id.txt
+            git commit -m "Atualiza último ID do BGSDS [skip ci]" || exit 0
+            git push
+          else
+            echo "Nenhuma mudança em last_bgsds_id.txt. Nada a commitar."
+          fi
