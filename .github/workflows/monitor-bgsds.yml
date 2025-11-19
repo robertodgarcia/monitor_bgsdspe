@@ -2,12 +2,14 @@ name: Monitorar Boletim Geral SDS-PE
 
 on:
   schedule:
-    # roda a cada 60 minutos
-    - cron: "*/60 * * * *"
+    # Roda no minuto 0
+    # Horas UTC: 11h às 23h (equivale a 08h às 20h no horário de Brasília)
+    # Dias: 2 (Terça) até 6 (Sábado)
+    - cron: "0 11-23 * * 2-6"
   workflow_dispatch: {}
 
 permissions:
-  contents: write  # necessário pra poder dar git push
+  contents: write
 
 jobs:
   monitor:
@@ -17,8 +19,8 @@ jobs:
       - name: Checkout do repositório
         uses: actions/checkout@v4
         with:
-          persist-credentials: true  # garante que o GITHUB_TOKEN será usado no push
-          fetch-depth: 0             # necessário para poder fazer pull/rebase
+          persist-credentials: true
+          fetch-depth: 0
 
       - name: Configurar Python
         uses: actions/setup-python@v5
@@ -49,3 +51,17 @@ jobs:
           else
             echo "Nenhuma mudança em last_bgsds_id.txt. Nada a commitar."
           fi
+
+      # --- NOVO PASSO DE NOTIFICAÇÃO DE ERRO ---
+      - name: Notificar Erro no Telegram
+        if: failure() # Só roda se algo acima der errado
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          MESSAGE="🚨 *FALHA NO MONITORAMENTO BGSDS* 🚨%0A%0AO script encontrou um erro durante a execução.%0A%0A🔗 [Ver logs do erro](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          
+          curl -s -X POST https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage \
+          -d chat_id=${TELEGRAM_CHAT_ID} \
+          -d text="$MESSAGE" \
+          -d parse_mode="Markdown"
