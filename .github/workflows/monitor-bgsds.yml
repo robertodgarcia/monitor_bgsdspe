@@ -2,8 +2,8 @@ name: Monitorar Boletim Geral SDS-PE
 
 on:
   schedule:
-    # roda a cada 15 minutos
-    - cron: "*/15 * * * *"
+    # roda a cada 60 minutos
+    - cron: "*/60 * * * *"
   workflow_dispatch: {}
 
 permissions:
