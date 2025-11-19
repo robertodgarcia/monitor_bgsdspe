@@ -12,8 +12,8 @@ LAST_ID_FILE = "last_bgsds_id.txt"
 # 🔎 Ajuste suas palavras-chave aqui
 # Ele vai verificar cada uma e dizer se encontrou ou não
 KEYWORDS = [
-    "PORTARIA NORMATIVA",   # exemplo
-    "DG/PCPE",              # exemplo
+    "dominguez",   # exemplo
+    "agostinho",              # exemplo
     # coloque aqui o que você quiser procurar
 ]
 
