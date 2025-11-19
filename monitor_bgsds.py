@@ -3,9 +3,19 @@ import re
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+from io import BytesIO
+from PyPDF2 import PdfReader
 
 URL = "https://www.sds.pe.gov.br/boletim-geral"
 LAST_ID_FILE = "last_bgsds_id.txt"
+
+# 🔎 Ajuste suas palavras-chave aqui
+# Ele vai verificar cada uma e dizer se encontrou ou não
+KEYWORDS = [
+    "PORTARIA NORMATIVA",   # exemplo
+    "DG/PCPE",              # exemplo
+    # coloque aqui o que você quiser procurar
+]
 
 MESES = {
     "JAN": "01",
@@ -101,12 +111,66 @@ def envia_telegram(mensagem):
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,
-        "text": mensagem,
-        "parse_mode": "HTML",
-        "disable_web_page_preview": False,
+            "text": mensagem,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": False,
     }
 
-    requests.post(url, json=payload, timeout=60)
+    resp = requests.post(url, json=payload, timeout=60)
+    resp.raise_for_status()
+
+
+def baixa_pdf_texto(pdf_url: str) -> str:
+    """
+    Baixa o PDF e retorna o texto extraído.
+    Usa PyPDF2 para ler todas as páginas.
+    """
+    resp = requests.get(pdf_url, timeout=120)
+    resp.raise_for_status()
+
+    with BytesIO(resp.content) as f:
+        reader = PdfReader(f)
+        textos = []
+        for page in reader.pages:
+            try:
+                textos.append(page.extract_text() or "")
+            except Exception:
+                # se der erro em uma página, continua nas outras
+                continue
+
+    texto_completo = "\n".join(textos)
+    return texto_completo
+
+
+def busca_palavras_no_pdf(pdf_url: str, palavras: list[str]) -> dict:
+    """
+    Baixa o PDF, extrai o texto e verifica se cada palavra-chave aparece.
+    Retorna dict: {palavra: True/False}
+    """
+    print(f"Baixando PDF para busca de palavras-chave: {pdf_url}")
+    texto = baixa_pdf_texto(pdf_url)
+    texto_lower = texto.lower()
+
+    resultado = {}
+    for p in palavras:
+        p_norm = p.lower()
+        encontrado = p_norm in texto_lower
+        resultado[p] = encontrado
+        print(f"Palavra-chave '{p}': {'ENCONTRADA' if encontrado else 'NÃO encontrada'}")
+
+    return resultado
+
+
+def monta_resumo_palavras(resultado: dict) -> str:
+    """
+    Monta um texto resumido para colocar na mensagem do Telegram,
+    mostrando se cada palavra-chave foi encontrada.
+    """
+    linhas = []
+    for palavra, ok in resultado.items():
+        status = "✅ encontrada" if ok else "❌ não encontrada"
+        linhas.append(f"• <b>{palavra}</b>: {status}")
+    return "\n".join(linhas)
 
 
 def main():
@@ -123,12 +187,22 @@ def main():
 
     # Se for o primeiro uso ou se há boletim mais novo
     if data_ultima is None or data_nova > data_ultima:
+        # 1) Busca palavras-chave no PDF
+        resumo_palavras = ""
+        try:
+            resultado = busca_palavras_no_pdf(pdf_url, KEYWORDS)
+            resumo_palavras = monta_resumo_palavras(resultado)
+        except Exception as e:
+            resumo_palavras = f"⚠️ Erro ao analisar o PDF para palavras-chave: {e}"
 
+        # 2) Monta mensagem do Telegram
         msg = (
             f"✅ <b>Novo Boletim Geral publicado!</b>\n\n"
             f"<b>{titulo_novo}</b>\n\n"
             f"📄 <a href=\"{pdf_url}\">Abrir PDF</a>\n"
-            f"{pdf_url}"
+            f"{pdf_url}\n\n"
+            f"<b>Busca de palavras-chave:</b>\n"
+            f"{resumo_palavras}"
         )
 
         envia_telegram(msg)
