@@ -18,9 +18,8 @@ KEYWORDS = [
 ]
 
 MESES = {
-    "JAN": "01", "FEV": "02", "MAR": "03", "ABR": "04",
-    "MAI": "05", "JUN": "06", "JUL": "07", "AGO": "08",
-    "SET": "09", "OUT": "10", "NOV": "11", "DEZ": "12",
+    "JAN": "01", "FEV": "02", "MAR": "03", "ABR": "04", "MAI": "05", "JUN": "06",
+    "JUL": "07", "AGO": "08", "SET": "09", "OUT": "10", "NOV": "11", "DEZ": "12",
 }
 
 def parse_data(texto):
@@ -37,7 +36,7 @@ def parse_data(texto):
     return datetime(ano, int(mes), dia)
 
 def lista_boletins():
-    """Retorna lista de boletins ordenados por data."""
+    """Retorna lista de boletins ordenada por data."""
     try:
         resp = requests.get(URL, timeout=60)
         resp.raise_for_status()
@@ -61,6 +60,7 @@ def lista_boletins():
         pdf_url = requests.compat.urljoin(URL, href)
         boletins.append((data, texto, pdf_url))
 
+    # Ordenar pela data real (mais recente primeiro)
     boletins.sort(key=lambda x: x[0], reverse=True)
     return boletins
 
@@ -83,7 +83,7 @@ def envia_telegram(mensagem):
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
 
     if not token or not chat_id:
-        print("⚠️ Erro: Tokens do Telegram não configurados nas variáveis de ambiente.")
+        print("ERRO: Tokens do Telegram não configurados.")
         return
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -93,11 +93,13 @@ def envia_telegram(mensagem):
         "parse_mode": "HTML",
         "disable_web_page_preview": False,
     }
+
     try:
         resp = requests.post(url, json=payload, timeout=60)
         resp.raise_for_status()
+        print("Mensagem enviada para o Telegram com sucesso.")
     except Exception as e:
-        print(f"Erro ao enviar mensagem no Telegram: {e}")
+        print(f"Erro ao enviar Telegram: {e}")
 
 def baixa_pdf_texto(pdf_url: str) -> str:
     resp = requests.get(pdf_url, timeout=120)
@@ -113,14 +115,13 @@ def baixa_pdf_texto(pdf_url: str) -> str:
     return "\n".join(textos)
 
 def busca_palavras_no_pdf(pdf_url: str, palavras: list[str]) -> dict:
-    print(f"Baixando PDF para busca de palavras-chave: {pdf_url}")
+    print(f"Baixando PDF para busca: {pdf_url}")
     texto = baixa_pdf_texto(pdf_url)
     texto_lower = texto.lower()
     resultado = {}
     for p in palavras:
         p_norm = p.lower()
-        encontrado = p_norm in texto_lower
-        resultado[p] = encontrado
+        resultado[p] = p_norm in texto_lower
     return resultado
 
 def monta_resumo_palavras(resultado: dict) -> str:
@@ -131,25 +132,27 @@ def monta_resumo_palavras(resultado: dict) -> str:
     return "\n".join(linhas)
 
 def main():
-    # 1. Envia a mensagem inicial fixa
-    print("Enviando mensagem inicial...")
-    envia_telegram("relatorio do boletim geral da sds")
-
     boletins = lista_boletins()
+    
+    # Cabeçalho padrão da mensagem
+    mensagem_final = "<b>Relatório do Boletim Geral da SDS/PE</b>\n"
+
     if not boletins:
-        print("Nenhum boletim encontrado no site.")
-        envia_telegram("Não foi possível ler os boletins do site para verificar atualizações.")
+        mensagem_final += "⚠️ Não foi possível ler a lista de boletins no site."
+        envia_telegram(mensagem_final)
         return
 
     data_nova, titulo_novo, pdf_url = boletins[0]
     data_ultima = carrega_ultimo()
 
-    print(f"Mais recente encontrado: {data_nova} → {titulo_novo}")
-    print(f"Último registrado: {data_ultima}")
+    print(f"Mais recente no site: {titulo_novo} ({data_nova})")
+    print(f"Último salvo localmente: {data_ultima}")
 
-    # 2. Verifica se tem atualização
+    # Verifica se há atualização
     if data_ultima is None or data_nova > data_ultima:
-        # CASO: Tem atualização (igual ao script original)
+        # --- Lógica de NOVA ATUALIZAÇÃO ---
+        
+        # 1) Busca palavras-chave no PDF
         resumo_palavras = ""
         try:
             resultado = busca_palavras_no_pdf(pdf_url, KEYWORDS)
@@ -157,23 +160,27 @@ def main():
         except Exception as e:
             resumo_palavras = f"⚠️ Erro ao analisar o PDF: {e}"
 
-        msg = (
-            f"✅ <b>Novo Boletim Geral publicado!</b>\n\n"
-            f"<b>{titulo_novo}</b>\n\n"
-            f"📄 <a href=\"{pdf_url}\">Abrir PDF</a>\n"
-            f"{pdf_url}\n\n"
+        # 2) Monta o corpo da mensagem de sucesso
+        corpo_msg = (
+            f"✅ <b>Atualização encontrada!</b>\n\n"
+            f"<b>{titulo_novo}</b>\n"
+            f"📄 <a href=\"{pdf_url}\">Abrir PDF</a>\n\n"
             f"<b>Busca de palavras-chave:</b>\n"
             f"{resumo_palavras}"
         )
-
-        envia_telegram(msg)
+        
+        # Atualiza o arquivo local com a data nova
         salva_ultimo(data_nova)
-        print("Atualização encontrada e notificada.")
     
     else:
-        # CASO: Não tem atualização
-        print("Sem novidades.")
-        envia_telegram("Não houve atualização.")
+        # --- Lógica de SEM ATUALIZAÇÃO ---
+        corpo_msg = "❌ Não houve atualização."
+
+    # Junta o cabeçalho com o corpo da mensagem
+    mensagem_final += corpo_msg
+    
+    # Envia a mensagem (seja de atualização ou de não atualização)
+    envia_telegram(mensagem_final)
 
 if __name__ == "__main__":
     main()
