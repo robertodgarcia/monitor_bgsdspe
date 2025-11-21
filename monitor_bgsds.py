@@ -24,7 +24,7 @@ MESES = {
 
 def parse_data(texto):
     """Extrai a data real do boletim no formato datetime."""
-    m = re.search(r"DE\s*(\d{1,2})([A-Z]{3})(\d{4})", texto)
+    m = re.search(r"DE\s*(\d{1,2})([A-Z]{3})(\d{4})", texto.upper()) # Converte para upper antes de buscar
     if not m:
         return None
     dia = int(m.group(1))
@@ -136,10 +136,11 @@ def main():
     
     # Cabeçalho padrão da mensagem
     mensagem_final = "<b>Relatório do Boletim Geral da SDS/PE</b>\n"
-
+    
+    # Se a lista falhar, envia a mensagem de erro.
     if not boletins:
         mensagem_final += "⚠️ Não foi possível ler a lista de boletins no site."
-        envia_telegram(mensagem_final)
+        envia_telegram(mensagem_final) # Envia apenas em caso de erro na leitura do site
         return
 
     data_nova, titulo_novo, pdf_url = boletins[0]
@@ -169,18 +170,17 @@ def main():
             f"{resumo_palavras}"
         )
         
-        # Atualiza o arquivo local com a data nova
+        # 3) Atualiza o arquivo local com a data nova
         salva_ultimo(data_nova)
-    
+        
+        # 4) Envia a mensagem (SÓ AQUI, DENTRO DO IF)
+        mensagem_final += corpo_msg
+        envia_telegram(mensagem_final)
     else:
         # --- Lógica de SEM ATUALIZAÇÃO ---
-        corpo_msg = "❌ Não houve atualização."
-
-    # Junta o cabeçalho com o corpo da mensagem
-    mensagem_final += corpo_msg
-    
-    # Envia a mensagem (seja de atualização ou de não atualização)
-    envia_telegram(mensagem_final)
+        # Não faz nada e o script termina sem enviar mensagem para o Telegram.
+        print("Boletim já processado. Nenhuma atualização para notificar.")
+        pass # Apenas passa
 
 if __name__ == "__main__":
     main()
