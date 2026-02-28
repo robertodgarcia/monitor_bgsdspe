@@ -7,7 +7,7 @@ from io import BytesIO
 from PyPDF2 import PdfReader
 
 # Configurações
-URL = "https://www.sds.pe.gov.br/boletim-geral"
+URL = "https://www.sds.pe.gov.br/mais/boletim-geral"
 LAST_ID_FILE = "last_bgsds_id.txt"
 
 # 🔎 Ajuste suas palavras-chave aqui
