@@ -149,6 +149,8 @@ def main():
     print(f"Mais recente no site: {titulo_novo} ({data_nova})")
     print(f"Último salvo localmente: {data_ultima}")
 
+    print("Último PDF:", pdf_url)
+
     # Verifica se há atualização
     if data_ultima is None or data_nova > data_ultima:
         # --- Lógica de NOVA ATUALIZAÇÃO ---
