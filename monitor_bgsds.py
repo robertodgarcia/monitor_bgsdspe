@@ -140,7 +140,7 @@ def main():
     # Se a lista falhar, envia a mensagem de erro.
     if not boletins:
         mensagem_final += "⚠️ Não foi possível ler a lista de boletins no site."
-        envia_telegram(mensagem_final) # Envia apenas em caso de erro na leitura do site
+      # envia_telegram(mensagem_final) # Envia apenas em caso de erro na leitura do site
         return
 
     data_nova, titulo_novo, pdf_url = boletins[0]
